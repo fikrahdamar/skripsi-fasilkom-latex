@@ -30,6 +30,7 @@ LOG_PATTERNS = [
     r"LaTeX Warning: (Reference|Citation) .* undefined",
     r"There were undefined references",
     r"Please \(re\)run Biber",
+    r"Missing character: There is no",
     r"Overfull \\hbox \((\d{2,}|[3-9])\.\d+pt too wide\)",
 ]
 

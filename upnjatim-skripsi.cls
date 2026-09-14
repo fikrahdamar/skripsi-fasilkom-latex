@@ -54,6 +54,11 @@
 \RequirePackage[fleqn]{amsmath}
 \RequirePackage{unicode-math}
 \setmathfont{texgyretermes-math.otf}
+% Times New Roman tidak punya glif ✓; ambil dari font matematika agar
+% \checkmark juga aman dipakai di luar mode matematika (mis. tabel jadwal).
+\AtBeginDocument{%
+  \let\upn@checkmark\checkmark
+  \renewcommand{\checkmark}{\ensuremath{\upn@checkmark}}}
 \RequirePackage{listings}
 \RequirePackage{xurl}
 \RequirePackage{xkeyval}
@@ -307,6 +312,7 @@
        \setstretch{1}%
        \hyphenpenalty=10000\exhyphenpenalty=10000
        \setlength{\parskip}{0pt}%
+       \raggedright
        {\fontsize{14pt}{17pt}\selectfont\upn@labeljenis\par}
        \vspace{8mm}
        {\fontsize{18pt}{26pt}\selectfont\bfseries\MakeUppercase{\upn@judul}\par}
@@ -323,6 +329,7 @@
       {\upn@fontsampul
        \ifupn@sampuloranye\color{white}\fi
        \setstretch{1}%
+       \raggedright
        \fontsize{12pt}{18.5pt}\selectfont\bfseries
        \MakeUppercase{\upn@kementerian}\par
        \MakeUppercase{\upn@universitas}\par
