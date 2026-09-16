@@ -1,12 +1,15 @@
 LATEXMK ?= latexmk
 OUT := build
 
-.PHONY: all praskripsi watch check clean
+.PHONY: all praskripsi docx watch check clean
 
 all: praskripsi
 
 praskripsi:
 	$(LATEXMK) -outdir=$(OUT) praskripsi.tex
+
+docx:
+	python3 scripts/build_docx.py
 
 watch:
 	$(LATEXMK) -pvc -outdir=$(OUT) praskripsi.tex

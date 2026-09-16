@@ -94,6 +94,26 @@ sudo tlmgr install latexmk biber biblatex biblatex-ieee babel-indonesian \
 Jika build gagal dengan pesan ``File `xyz.sty' not found``, pasang paket yang
 kurang dengan `sudo tlmgr install xyz`.
 
+**Biber gagal setelah pembaruan macOS.** Jika muncul pesan seperti
+
+```text
+biber: extracting arm64 binary with lipo failed (wstatus=256)
+```
+
+daftar pustaka menjadi kosong dan `latexmk` berhenti dengan galat. Biber bawaan
+TeX Live adalah *universal binary* yang membongkar dirinya saat dijalankan, dan
+proses itu dapat rusak setelah macOS diperbarui. Perbaiki dengan mengambil
+bagian arm64-nya satu kali:
+
+```sh
+lipo -thin arm64 -output /tmp/biber /Library/TeX/texbin/biber
+sudo cp /tmp/biber /usr/local/bin/biber
+biber --version    # harus cocok dengan versi bawaan TeX Live
+```
+
+Jangan memasang Biber dari Homebrew kecuali versinya sama dengan bawaan TeX
+Live; versi yang berbeda akan menolak berkas `.bcf` yang dihasilkan biblatex.
+
 ### Windows (belum diuji)
 
 > **Perhatian:** langkah Windows di bawah ini disusun dari dokumentasi TeX Live
@@ -181,6 +201,56 @@ Tanpa opsi `ketat`, font TeX Gyre (Termes, Heros, Cursor) otomatis dipakai bila
 font resmi tidak tersedia, misalnya di Overleaf. Gunakan font resmi untuk
 berkas yang dikumpulkan.
 
+## Ekspor ke Microsoft Word
+
+Dosen pembimbing sering meminta berkas Word untuk konsultasi. Jangan mengubah
+PDF menjadi Word karena tata letaknya rusak. Pakai:
+
+```sh
+make docx      # menghasilkan build/praskripsi.docx
+```
+
+Prasyarat: **Pandoc**. macOS: `brew install pandoc`. Windows: unduh pemasang
+dari <https://pandoc.org/installing.html>.
+
+Berkas `.docx` dibuat langsung dari sumber LaTeX, sehingga:
+
+- gaya Word disetel sesuai pedoman: Times New Roman 12 pt, spasi 1,5, margin
+  4/3/3/3 cm, judul bab 14 pt tebal rata tengah;
+- judul bernomor seperti pedoman (`BAB I PENDAHULUAN`, `1.1.`, `1.1.1.`);
+- rumus menjadi persamaan Word asli yang masih dapat disunting;
+- sitasi `\cite{...}` menjadi `[1]` dan daftar pustaka IEEE ikut tercetak,
+  dibuat dari `bibliography/references.bib` memakai `assets/ieee.csl`;
+- acuan `\ref{...}` diganti nomornya, misalnya `Persamaan 2.1`.
+
+Bagian yang sama seperti PDF:
+
+- **sampul** disisipkan sebagai gambar halaman penuh, diambil dari halaman
+  pertama PDF (karena itu PDF dibuat lebih dulu bila belum ada);
+- **daftar isi, daftar gambar, dan daftar tabel** berupa *field* Word yang
+  memuat nomor halaman sebenarnya. Word memperbaruinya saat berkas dibuka; bila
+  masih kosong, klik kanan daftarnya lalu pilih **Update Field**;
+- **nomor halaman** di tengah bawah: angka romawi untuk bagian awal dan angka
+  arab mulai dari BAB I.
+
+Yang masih berbeda:
+
+- penomoran halaman Word tidak persis sama dengan PDF karena Word mengatur
+  ulang baris dan pemenggalan halaman;
+- gambar TikZ diganti penanda teks; gambar dari berkas biasa tetap ikut;
+- judul tabel diletakkan Word di bawah tabel, bukan di atas;
+- sampul berupa gambar, jadi teksnya tidak dapat disunting di Word. Ubah
+  `metadata.tex` lalu jalankan `make docx` lagi.
+
+Perbaikan dari dosen tetap diterapkan pada berkas `.tex`, lalu `make docx`
+dijalankan ulang. PDF resmi tetap dihasilkan `make`.
+
+**Jika dosen memakai Mendeley:** sitasi pada `.docx` berupa teks biasa, bukan
+kolom (*field*) Mendeley, sehingga dosen tidak dapat memutakhirkannya langsung
+dari Mendeley. Catat referensi baru dari dosen ke `bibliography/references.bib`.
+Untuk mengelola pustaka sendiri, Zotero dengan pengaya Better BibTeX dapat
+mengekspor `.bib` secara otomatis.
+
 ## Overleaf
 
 Unggah seluruh isi repositori, pilih compiler **XeLaTeX**, dan jadikan
@@ -202,3 +272,7 @@ Kode dan dokumentasi dirilis dengan **LPPL 1.3c atau lebih baru**. Struktur
 class diadaptasi dari template tidak resmi proposal skripsi FILKOM UB karya
 Pande Kadek Nathan Prabhaswara Sudiara Putra (LPPL 1.3c). Logo UPN "Veteran"
 Jawa Timur tidak tercakup LPPL; lihat `assets/NOTICE.md`.
+
+`assets/ieee.csl` berasal dari proyek
+[Citation Style Language](https://github.com/citation-style-language/styles)
+dan berlisensi CC BY-SA 3.0, terpisah dari LPPL.
