@@ -195,7 +195,14 @@ Opsi class:
 \documentclass[jenis=praskripsi]{upnjatim-skripsi}   % bawaan
 \documentclass[sampul=oranye]{upnjatim-skripsi}      % sampul latar oranye (softcover)
 \documentclass[ketat]{upnjatim-skripsi}              % gagal jika font resmi tidak ada
+\documentclass[pemenggalan]{upnjatim-skripsi}        % izinkan kata dipenggal dengan tanda hubung
 ```
+
+Secara bawaan kata **tidak dipenggal** di ujung baris, mengikuti pedoman dan
+template Word: kata yang tidak muat dipindahkan utuh ke baris berikutnya.
+Akibatnya jarak antarkata pada teks rata kanan-kiri bisa melebar, persis
+seperti keluaran Word. Opsi `pemenggalan` mengembalikan perilaku LaTeX biasa
+yang memakai tanda hubung.
 
 Tanpa opsi `ketat`, font TeX Gyre (Termes, Heros, Cursor) otomatis dipakai bila
 font resmi tidak tersedia, misalnya di Overleaf. Gunakan font resmi untuk

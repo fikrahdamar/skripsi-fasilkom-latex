@@ -11,6 +11,7 @@
 \DeclareStringOption[praskripsi]{jenis}
 \DeclareStringOption[putih]{sampul}
 \DeclareBoolOption{ketat}
+\DeclareBoolOption{pemenggalan}
 \ProcessKeyvalOptions*
 \LoadClass[a4paper,12pt,oneside]{report}
 
@@ -136,7 +137,17 @@
 \setstretch{1.43}
 \setlength{\parindent}{1.27cm}
 \setlength{\parskip}{6pt}
-\setlength{\emergencystretch}{2em}
+% Pedoman dan template Word tidak memenggal kata di ujung baris; kata yang
+% tidak muat dipindahkan utuh ke baris berikutnya. Nyalakan pemenggalan
+% dengan opsi class "pemenggalan".
+\ifupn@pemenggalan
+  \setlength{\emergencystretch}{2em}
+\else
+  \hyphenpenalty=10000
+  \exhyphenpenalty=10000
+  \tolerance=9999
+  \setlength{\emergencystretch}{3em}
+\fi
 \clubpenalty=10000
 \widowpenalty=10000
 \displaywidowpenalty=10000
