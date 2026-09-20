@@ -21,7 +21,9 @@ SZ_ISI = "24"      # 12 pt
 SZ_BAB = "28"      # 14 pt
 SZ_KODE = "18"     # 9 pt
 SPASI_15 = "360"   # 1,5 baris
-IND_BARIS = "720"  # indentasi baris pertama 1,27 cm
+IND_BARIS = "720"   # indentasi baris pertama 1,27 cm
+LEBAR_TEKS = "7938" # 14 cm: lebar teks A4 dengan margin 4 cm dan 3 cm
+GAYA_TANPA_NOMOR = "JudulTanpaNomor"
 MARGIN = {"left": "2268", "right": "1701", "top": "1701", "bottom": "1701"}
 
 
@@ -108,18 +110,9 @@ def bersihkan(teks: str, nomor_bab: int) -> str:
     teks = ganti_perintah(teks, "lampiran", lambda isi: f"\\chapter{{Lampiran: {isi}}}")
     teks = teks.replace("\\checkmark", "✓")
 
-    # Penomoran judul mengikuti pedoman: BAB I, lalu 1.1., 1.1.1., 1.1.1.1.
-    pencacah = [0, 0, 0]
-
-    def ganti(m: re.Match[str]) -> str:
-        tingkat = {"section": 0, "subsection": 1, "subsubsection": 2}[m.group(1)]
-        pencacah[tingkat] += 1
-        for i in range(tingkat + 1, 3):
-            pencacah[i] = 0
-        nomor = ".".join(str(n) for n in [nomor_bab, *pencacah[: tingkat + 1]])
-        return f"\\{m.group(1)}{{{nomor}. {m.group(2)}}}"
-
-    return re.sub(r"\\(section|subsection|subsubsection)\{([^}]*)\}", ganti, teks)
+    # Nomor subbab tidak ditulis sebagai teks; Word menomorinya sendiri lewat
+    # daftar bertingkat yang ditautkan ke gaya Heading (lihat _pasang_penomoran).
+    return teks
 
 
 def kumpulkan_label(berkas: list[Path]) -> dict[str, str]:
@@ -140,8 +133,10 @@ def kumpulkan_label(berkas: list[Path]) -> dict[str, str]:
     return peta
 
 
-def sumber_gabungan(meta: dict[str, str], berkas: list[Path]) -> str:
-    bagian = [blok_judul(meta)]
+def sumber_gabungan(meta: dict[str, str], berkas: list[Path], blok_sampul: bool = True) -> str:
+    # Blok judul teks hanya dipakai bila gambar sampul tidak tersedia, agar
+    # sampulnya tidak tampil dua kali.
+    bagian = [blok_judul(meta)] if blok_sampul else []
     peta_label = kumpulkan_label(berkas)
     nomor_bab = 0
     pustaka_tercetak = False
@@ -226,7 +221,7 @@ def reference_docx(tujuan: Path) -> Path:
         "BodyText": (SZ_ISI, False, "both", None),
         "FirstParagraph": (SZ_ISI, False, "both", None),
         "Compact": (SZ_ISI, False, "both", None),
-        "Heading1": (SZ_BAB, True, "center", ("240", "240")),
+        "Heading1": (SZ_BAB, True, "center", ("0", "240")),
         "Heading2": (SZ_ISI, True, "left", ("240", "120")),
         "Heading3": (SZ_ISI, True, "left", ("180", "120")),
         "Heading4": (SZ_ISI, True, "left", ("180", "120")),
@@ -249,13 +244,14 @@ def reference_docx(tujuan: Path) -> Path:
 
     # Paragraf isi: baris pertama masuk 1,27 cm dan jarak antarparagraf 6 pt,
     # sama seperti keluaran PDF. Judul, keterangan, dan pustaka tanpa indentasi.
-    for style_id in ("Normal", "BodyText", "FirstParagraph", "Compact"):
+    for style_id in ("Normal", "BodyText", "FirstParagraph"):
         gaya = _gaya(akar, style_id)
         if gaya is not None:
             ppr = _anak(gaya, "pPr")
             _atur(ppr, "ind", firstLine=IND_BARIS)
             _atur(ppr, "spacing", before="0", after="120", line=SPASI_15, lineRule="auto")
-    for style_id in ("Heading1", "Heading2", "Heading3", "Heading4", "Caption",
+    # "Compact" dipakai Pandoc untuk butir daftar; butir tidak boleh menjorok.
+    for style_id in ("Compact", "Heading1", "Heading2", "Heading3", "Heading4", "Caption",
                      "TableCaption", "ImageCaption", "Bibliography", "SourceCode"):
         gaya = _gaya(akar, style_id)
         if gaya is not None:
@@ -273,6 +269,65 @@ def reference_docx(tujuan: Path) -> Path:
             for atribut in ("themeColor", "themeShade", "themeTint"):
                 simpul.attrib.pop(f"{W}{atribut}", None)
             simpul.set(f"{W}val", "000000")
+
+    # Tiap bab mulai di halaman baru, sama seperti PDF.
+    bab = _gaya(akar, "Heading1")
+    if bab is not None:
+        _anak(_anak(bab, "pPr"), "pageBreakBefore")
+
+    # Tabel Pandoc tidak bergaris; PDF memakai garis penuh, jadi disamakan.
+    tabel = _gaya(akar, "Table")
+    if tabel is not None:
+        tblpr = _anak(tabel, "tblPr")
+        garis = _anak(tblpr, "tblBorders")
+        for sisi in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            _atur(garis, sisi, val="single", sz="4", space="0", color="000000")
+        marjin = _anak(tblpr, "tblCellMar")
+        for sisi in ("left", "right"):
+            _atur(marjin, sisi, w="108", type="dxa")
+        ppr = _anak(tabel, "pPr")
+        _atur(ppr, "ind", firstLine="0", left="0")
+        _atur(ppr, "spacing", before="0", after="0", line="240", lineRule="auto")
+
+    # Gaya judul tanpa nomor untuk bagian awal, daftar pustaka, dan lampiran.
+    # Tetap outlineLvl 0 agar ikut tercantum di Daftar Isi, tetapi tidak
+    # menambah hitungan bab sehingga subbab BAB I tetap 1.1.
+    if _gaya(akar, GAYA_TANPA_NOMOR) is None:
+        gaya = ET.SubElement(akar, f"{W}style")
+        gaya.set(f"{W}type", "paragraph")
+        gaya.set(f"{W}styleId", GAYA_TANPA_NOMOR)
+        _atur(gaya, "name", val="Judul Tanpa Nomor")
+        _atur(gaya, "basedOn", val="Heading1")
+        _atur(gaya, "next", val="BodyText")
+        ppr = _anak(gaya, "pPr")
+        _atur(ppr, "outlineLvl", val="0")
+        _atur(ppr, "ind", left="0", firstLine="0")
+    # Gaya ini diturunkan dari Heading1 sehingga ikut mewarisi penomorannya.
+    # numId 0 mematikan penomoran, agar judul seperti DAFTAR ISI tidak
+    # terhitung sebagai bab dan subbab BAB I tetap mulai dari 1.1.
+    numpr = _anak(_anak(_gaya(akar, GAYA_TANPA_NOMOR), "pPr"), "numPr")
+    _atur(numpr, "ilvl", val="0")
+    _atur(numpr, "numId", val="0")
+
+    # Gaya entri Daftar Isi. Tanpa ini Word menurunkannya dari Normal yang
+    # rata kanan-kiri dan menjorok, sehingga entrinya berantakan.
+    for tingkat in range(1, 4):
+        style_id = f"TOC{tingkat}"
+        gaya = _gaya(akar, style_id)
+        if gaya is None:
+            gaya = ET.SubElement(akar, f"{W}style")
+            gaya.set(f"{W}type", "paragraph")
+            gaya.set(f"{W}styleId", style_id)
+            _atur(gaya, "name", val=f"toc {tingkat}")
+            _atur(gaya, "basedOn", val="Normal")
+        ppr = _anak(gaya, "pPr")
+        _atur(ppr, "jc", val="left")
+        _atur(ppr, "spacing", before="0", after="0", line=SPASI_15, lineRule="auto")
+        _atur(ppr, "ind", left=str((tingkat - 1) * 360), firstLine="0")
+        tabs = _anak(ppr, "tabs")
+        for simpul in tabs.findall(f"{W}tab"):
+            tabs.remove(simpul)
+        _atur(tabs, "tab", val="right", leader="dot", pos=LEBAR_TEKS)
 
     kode = _gaya(akar, "SourceCode") or _gaya(akar, "VerbatimChar")
     if kode is not None:
@@ -341,7 +396,7 @@ def render_sampul(pdf: Path, tujuan: Path) -> Path | None:
 
 
 def _p_judul(teks: str) -> str:
-    return (f'<w:p {NS}><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+    return (f'<w:p {NS}><w:pPr><w:pStyle w:val="{GAYA_TANPA_NOMOR}"/></w:pPr>'
             f"<w:r><w:t>{teks}</w:t></w:r></w:p>")
 
 
@@ -360,7 +415,8 @@ def _p_sampul() -> str:
     lebar, tinggi = A4_EMU
     return (
         f'<w:p {NS}><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" '
-        f'w:lineRule="auto"/><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
+        f'w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/>'
+        f'<w:jc w:val="left"/></w:pPr><w:r><w:drawing>'
         f'<wp:inline distT="0" distB="0" distL="0" distR="0">'
         f'<wp:extent cx="{lebar}" cy="{tinggi}"/><wp:docPr id="991" name="Sampul"/>'
         f'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
@@ -370,6 +426,64 @@ def _p_sampul() -> str:
         f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
         f"</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
     )
+
+
+ID_NOMOR = "900"
+
+
+def _abstract_num() -> ET.Element:
+    """Daftar bertingkat yang ditautkan ke gaya Heading, seperti multilevel list Word.
+
+    Tingkat 1 hanya menghitung bab tanpa mencetak apa pun, karena kata
+    "BAB I" sudah menjadi bagian teks judulnya. Tingkat berikutnya memakai
+    angka bab tersebut sehingga menghasilkan 1.1., 1.1.1., dan seterusnya.
+    """
+    pola = {0: "", 1: "%1.%2.", 2: "%1.%2.%3.", 3: "%1.%2.%3.%4."}
+    abstrak = ET.Element(f"{W}abstractNum")
+    abstrak.set(f"{W}abstractNumId", ID_NOMOR)
+    for tingkat, teks in pola.items():
+        lvl = ET.SubElement(abstrak, f"{W}lvl")
+        lvl.set(f"{W}ilvl", str(tingkat))
+        _atur(lvl, "start", val="1")
+        _atur(lvl, "numFmt", val="decimal")
+        _atur(lvl, "pStyle", val=f"Heading{tingkat + 1}")
+        _atur(lvl, "lvlText", val=teks)
+        _atur(lvl, "lvlJc", val="left")
+        _atur(lvl, "suff", val="none" if tingkat == 0 else "tab")
+        ppr = _anak(lvl, "pPr")
+        _atur(ppr, "ind", left="0", firstLine="0")
+        tabs = _anak(ppr, "tabs")
+        _atur(tabs, "tab", val="left", pos=IND_BARIS)
+    return abstrak
+
+
+def _pasang_penomoran(isi: dict[str, bytes]) -> None:
+    """Tautkan gaya Heading ke daftar bertingkat agar Word menomori sendiri."""
+    if "word/numbering.xml" not in isi:
+        return
+    mentah = isi["word/numbering.xml"].decode("utf-8")
+    for prefiks, uri in re.findall(r'xmlns:([A-Za-z0-9]+)="([^"]+)"', mentah):
+        ET.register_namespace(prefiks, uri)
+    akar = ET.fromstring(mentah)
+    if akar.find(f".//{W}abstractNum[@{W}abstractNumId='{ID_NOMOR}']") is None:
+        # Seluruh abstractNum harus mendahului elemen num.
+        posisi = len(akar.findall(f"{W}abstractNum"))
+        akar.insert(posisi, _abstract_num())
+        nomor = ET.SubElement(akar, f"{W}num")
+        nomor.set(f"{W}numId", ID_NOMOR)
+        _atur(nomor, "abstractNumId", val=ID_NOMOR)
+    isi["word/numbering.xml"] = ET.tostring(akar, encoding="UTF-8", xml_declaration=True)
+
+    gaya_mentah = isi["word/styles.xml"].decode("utf-8")
+    akar_gaya = ET.fromstring(gaya_mentah)
+    for tingkat in range(4):
+        gaya = _gaya(akar_gaya, f"Heading{tingkat + 1}")
+        if gaya is None:
+            continue
+        numpr = _anak(_anak(gaya, "pPr"), "numPr")
+        _atur(numpr, "ilvl", val=str(tingkat))
+        _atur(numpr, "numId", val=ID_NOMOR)
+    isi["word/styles.xml"] = ET.tostring(akar_gaya, encoding="UTF-8", xml_declaration=True)
 
 
 def _footer_xml() -> bytes:
@@ -426,6 +540,19 @@ def susun_seperti_pdf(docx: Path, sampul: Path | None) -> None:
     sect_akhir.insert(0, _rujukan_footer())
     _atur(sect_akhir, "pgNumType", fmt="decimal", start="1")
 
+    # DAFTAR PUSTAKA dan LAMPIRAN bukan bab bernomor; pakai gaya tanpa nomor
+    # agar tidak menambah hitungan bab.
+    for paragraf in badan.findall(f"{W}p"):
+        ppr = paragraf.find(f"{W}pPr")
+        if ppr is None:
+            continue
+        gaya = ppr.find(f"{W}pStyle")
+        if gaya is None or gaya.get(f"{W}val") != "Heading1":
+            continue
+        teks = "".join(simpul.text or "" for simpul in paragraf.iter(f"{W}t"))
+        if teks.upper().startswith(("DAFTAR PUSTAKA", "LAMPIRAN")):
+            gaya.set(f"{W}val", GAYA_TANPA_NOMOR)
+
     awalan: list[ET.Element] = []
     if sampul is not None:
         p_sampul = ET.fromstring(_p_sampul())
@@ -434,21 +561,42 @@ def susun_seperti_pdf(docx: Path, sampul: Path | None) -> None:
                         mulai="1", pakai_footer=False))
         awalan.append(p_sampul)
 
-    awalan.append(ET.fromstring(_p_judul("DAFTAR ISI")))
+    # Judul pertama sudah berada di awal seksi baru; matikan page break-nya
+    # agar tidak muncul halaman kosong sesudah sampul.
+    p_isi = ET.fromstring(_p_judul("DAFTAR ISI"))
+    _anak(_anak(p_isi, "pPr"), "pageBreakBefore").set(f"{W}val", "0")
+    awalan.append(p_isi)
     awalan.append(ET.fromstring(_p_field(r' TOC \o "1-3" \h \z \u ')))
-    awalan.append(ET.fromstring(_p_judul("DAFTAR GAMBAR")))
-    awalan.append(ET.fromstring(_p_field(r' TOC \h \z \t "ImageCaption,1" ')))
-    awalan.append(ET.fromstring(_p_judul("DAFTAR TABEL")))
-    p_lot = ET.fromstring(_p_field(r' TOC \h \z \t "TableCaption,1" '))
-    _anak(p_lot, "pPr").append(
+    # Field TOC yang kosong membuat Word menampilkan pesan galat, jadi daftar
+    # gambar/tabel hanya dibuat bila keterangannya memang ada di naskah.
+    for judul, gaya in (("DAFTAR GAMBAR", "ImageCaption"), ("DAFTAR TABEL", "TableCaption")):
+        if f'w:val="{gaya}"' not in mentah:
+            continue
+        awalan.append(ET.fromstring(_p_judul(judul)))
+        awalan.append(ET.fromstring(_p_field(rf' TOC \h \z \t "{gaya},1" ')))
+    # Paragraf terakhir bagian awal memuat properti seksinya.
+    _anak(awalan[-1], "pPr").append(
         _sect_salin(sect_akhir, margin_nol=False, format_nomor="lowerRoman",
                     mulai="2", pakai_footer=True))
-    awalan.append(p_lot)
 
     for posisi, simpul in enumerate(awalan):
         badan.insert(posisi, simpul)
     isi["word/document.xml"] = ET.tostring(akar, encoding="UTF-8", xml_declaration=True)
 
+    # Tanpa penanda versi, Word membuka berkas dalam mode kompatibilitas dan
+    # meminta konfirmasi pemutakhiran format setiap kali disimpan.
+    if "word/settings.xml" in isi:
+        pengaturan = isi["word/settings.xml"].decode("utf-8")
+        if "compatibilityMode" not in pengaturan:
+            pengaturan = pengaturan.replace(
+                "</w:settings>",
+                '<w:compat><w:compatSetting w:name="compatibilityMode" '
+                'w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>'
+                "</w:compat></w:settings>",
+            )
+            isi["word/settings.xml"] = pengaturan.encode("utf-8")
+
+    _pasang_penomoran(isi)
     isi["word/footer1.xml"] = _footer_xml()
     tambahan = (
         f'<Relationship Id="{ID_FOOTER}" Type="http://schemas.openxmlformats.org/'
@@ -496,8 +644,19 @@ def main() -> int:
 
     kerja = args.keluaran.parent / "docx"
     kerja.mkdir(parents=True, exist_ok=True)
+
+    # Sampul diambil dari halaman pertama PDF; disiapkan lebih dulu karena
+    # menentukan perlu tidaknya blok judul berupa teks.
+    pdf = pdf_siap(args.utama, args.keluaran.with_suffix(".pdf"))
+    sampul = render_sampul(pdf, kerja / "sampul.png") if pdf else None
+    if sampul is None:
+        print("PERINGATAN  Sampul gambar tidak tersedia; memakai blok judul teks")
+
     sumber = kerja / "sumber.tex"
-    sumber.write_text(sumber_gabungan(metadata(), urutan_input(args.utama)), encoding="utf-8")
+    sumber.write_text(
+        sumber_gabungan(metadata(), urutan_input(args.utama), blok_sampul=sampul is None),
+        encoding="utf-8",
+    )
 
     # Tahap 1: LaTeX -> Markdown, tanpa citeproc.
     antara = subprocess.run(
@@ -538,11 +697,7 @@ def main() -> int:
         if aliran.strip():
             print(aliran.strip())
 
-    # Samakan dengan PDF: sampul, daftar isi/gambar/tabel, dan nomor halaman.
-    pdf = pdf_siap(args.utama, args.keluaran.with_suffix(".pdf"))
-    sampul = render_sampul(pdf, kerja / "sampul.png") if pdf else None
-    if sampul is None:
-        print("PERINGATAN  Sampul tidak disertakan (PDF atau pdftoppm tidak tersedia)")
+    # Samakan dengan PDF: sampul, daftar isi/tabel, dan nomor halaman.
     susun_seperti_pdf(args.keluaran, sampul)
     print(f"LULUS  {args.keluaran}")
     return 0
