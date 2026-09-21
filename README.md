@@ -234,11 +234,15 @@ Bagian yang sama seperti PDF:
 
 - **sampul** disisipkan sebagai gambar halaman penuh, diambil dari halaman
   pertama PDF (karena itu PDF dibuat lebih dulu bila belum ada);
-- **daftar isi, daftar gambar, dan daftar tabel** berupa *field* Word yang
-  memuat nomor halaman sebenarnya. Word memperbaruinya saat berkas dibuka; bila
-  masih kosong, klik kanan daftarnya lalu pilih **Update Field**;
-- **nomor halaman** di tengah bawah: angka romawi untuk bagian awal dan angka
-  arab mulai dari BAB I.
+- **daftar isi dan daftar tabel/gambar** berupa *field* Word berisi nomor
+  halaman sebenarnya. Daftar gambar/tabel hanya dibuat bila naskah memang
+  memuat keterangan gambar/tabel, karena *field* kosong membuat Word
+  menampilkan pesan galat;
+- **penomoran judul** memakai *multilevel list* Word yang ditautkan ke gaya
+  Heading 1--4. Menyisipkan subbab di Word membuat nomor sesudahnya
+  menyesuaikan sendiri;
+- **tiap bab mulai di halaman baru**, dan **nomor halaman** di tengah bawah:
+  angka romawi untuk bagian awal, angka arab mulai dari BAB I.
 
 Yang masih berbeda:
 
@@ -249,14 +253,41 @@ Yang masih berbeda:
 - sampul berupa gambar, jadi teksnya tidak dapat disunting di Word. Ubah
   `metadata.tex` lalu jalankan `make docx` lagi.
 
+### Dialog yang muncul di Word
+
+| Dialog | Artinya | Lakukan |
+|---|---|---|
+| "This document contains fields that may refer to other files" | Word menawarkan mengisi *field* daftar isi | klik **Yes** |
+| Daftar isi masih kosong | *field* belum dihitung | klik di dalam daftar lalu **F9**, atau **Cmd/Ctrl + A** lalu **F9** |
+
+Berkas sudah ditandai sebagai format Word modern, sehingga tidak lagi terbuka
+dalam *Compatibility Mode*.
+
+### Peringatan: sitasi bukan kolom Mendeley
+
+Sitasi pada `.docx` berupa **teks biasa** hasil olahan biblatex/CSL, bukan
+kolom (*field*) Mendeley atau Zotero. Konsekuensinya:
+
+- dosen **tidak dapat** mengeklik sitasi lalu memutakhirkannya lewat Mendeley
+  Cite, dan **tidak dapat** mengganti gaya sitasi dari dalam Word;
+- menambah referensi baru dengan Mendeley di berkas `.docx` hanya berlaku pada
+  salinan tersebut; berkas itu akan tertimpa saat `make docx` dijalankan lagi;
+- sumber kebenaran tetap `bibliography/references.bib`. Referensi baru dari
+  dosen dicatat ke sana, lalu `make` dan `make docx` diulang.
+
+Yang **bisa** dilakukan: `bibliography/references.bib` dapat diimpor ke
+Mendeley (**File → Import → BibTeX**) atau Zotero, sehingga pustaka dosen dan
+mahasiswa tetap sama. Impor **salinannya**, jangan berkas di repositori,
+karena Mendeley membuat ulang *citation key*, membuang komentar, dan sering
+menghapus kurung kurawal pelindung kapital seperti `{Javanese}`. Mengekspor
+balik dari Mendeley lalu menimpa `references.bib` akan memutus seluruh
+`\cite{...}` pada naskah.
+
+Untuk pustaka yang memperbarui `.bib` secara otomatis tanpa merusak kunci,
+gunakan Zotero dengan pengaya Better BibTeX.
+
 Perbaikan dari dosen tetap diterapkan pada berkas `.tex`, lalu `make docx`
 dijalankan ulang. PDF resmi tetap dihasilkan `make`.
-
-**Jika dosen memakai Mendeley:** sitasi pada `.docx` berupa teks biasa, bukan
-kolom (*field*) Mendeley, sehingga dosen tidak dapat memutakhirkannya langsung
-dari Mendeley. Catat referensi baru dari dosen ke `bibliography/references.bib`.
-Untuk mengelola pustaka sendiri, Zotero dengan pengaya Better BibTeX dapat
-mengekspor `.bib` secara otomatis.
 
 ## Overleaf
 
